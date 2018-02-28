@@ -1,0 +1,68 @@
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+
+import static java.lang.String.format
+import static java.nio.file.Files.createDirectories
+import static java.nio.file.Files.move
+
+task collectCommits doLast {
+    def root = Paths.get(project.property('reposRoot').toString())
+
+    Files.list(root).each { repoPath ->
+        def commits = findCommits(repoPath, project.property('author'))
+        project.logger.info "Found ${commits.size()} commits in $repoPath"
+        def out = monthPath.resolve(repoPath.getFileName().toString())
+
+        commits.reverse().eachWithIndex { commit, i ->
+            def path = writePatch(commit, out, repoPath)
+            def id = format("%04d", i)
+            move(path, path.getParent().resolve(path.getFileName().toString().replaceFirst("0001", id)))
+        }
+    }
+}
+
+task archive(type: Zip) {
+    destinationDir = project.buildDir
+    archiveName = "${monthName}.zip"
+    from monthPath.toFile()
+    dependsOn collectCommits
+}
+
+task clean() doLast {
+    project.delete(project.buildDir)
+}
+
+private static writePatch(commit, outputDirectory, repoPath) {
+    createDirectories(outputDirectory)
+    Paths.get("git --git-dir=${repoPath.resolve('.git')} format-patch -o${outputDirectory} -1 ${commit}".execute().text.trim())
+}
+
+private java.nio.file.Path getMonthPath() {
+    project.buildDir.toPath().resolve(monthName)
+}
+
+private String getMonthName() {
+    startDate.format(DateTimeFormatter.ofPattern("MMMM", Locale.ENGLISH))
+}
+
+private List<String> findCommits(repo, author) {
+    def cmd = $/git 
+        --git-dir=${repo.resolve('.git')} log 
+        --author-date-order --remotes --no-merges 
+        --after=${startDate} 
+        --before=${endDate} 
+        --author=${author} 
+        --pretty=%H/$
+    cmd.execute().text.split("\n").findAll { !it.trim().empty }
+}
+
+private LocalDate getEndDate() {
+    getStartDate().plusMonths(1)
+}
+
+private LocalDate getStartDate() {
+    def date = LocalDate.now().withDayOfMonth(1)
+    return project.hasProperty('month') ? date.withMonth(project.property('month') as int) : date
+}
