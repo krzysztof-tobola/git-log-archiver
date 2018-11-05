@@ -24,7 +24,7 @@ task collectCommits doLast {
 }
 
 task archive(type: Zip) {
-    destinationDir = project.buildDir
+    destinationDir = new File(project.buildDir, year)
     archiveName = "${monthName}.zip"
     from monthPath.toFile()
     dependsOn collectCommits
@@ -40,11 +40,14 @@ private static writePatch(commit, outputDirectory, repoPath) {
 }
 
 private java.nio.file.Path getMonthPath() {
-    project.buildDir.toPath().resolve(monthName)
+    project.buildDir.toPath().resolve(year).resolve(monthName)
 }
 
 private String getMonthName() {
     startDate.format(DateTimeFormatter.ofPattern("MMMM", Locale.ENGLISH))
+}
+private String getYear() {
+    startDate.format(DateTimeFormatter.ofPattern("YYYY", Locale.ENGLISH))
 }
 
 private List<String> findCommits(repo, author) {
@@ -64,5 +67,10 @@ private LocalDate getEndDate() {
 
 private LocalDate getStartDate() {
     def date = LocalDate.now().withDayOfMonth(1)
-    return project.hasProperty('month') ? date.withMonth(project.property('month') as int) : date
+    def date2 = adjustDate(date, 'month') { d, m -> d.withMonth(m) }
+    return adjustDate(date2, 'year') { d, y -> d.withYear(y) }
+}
+
+private adjustDate(LocalDate date, String property, Closure<LocalDate> closure) {
+    project.hasProperty(property) ? closure(date, project.property(property) as int) : date
 }
