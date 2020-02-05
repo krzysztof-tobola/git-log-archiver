@@ -11,6 +11,7 @@ task collectCommits doLast {
     def root = Paths.get(project.property('reposRoot').toString())
 
     Files.list(root).each { repoPath ->
+        fetch(repoPath)
         def commits = findCommits(repoPath, project.property('author'))
         project.logger.info "Found ${commits.size()} commits in $repoPath"
         def out = monthPath.resolve(repoPath.getFileName().toString())
@@ -44,11 +45,21 @@ private java.nio.file.Path getMonthPath() {
 }
 
 private String getMonthName() {
-    startDate.format(DateTimeFormatter.ofPattern("MMMM", Locale.ENGLISH))
+    startDate.format(DateTimeFormatter.ofPattern("MM", Locale.ENGLISH))
 }
+
 private String getYear() {
     startDate.format(DateTimeFormatter.ofPattern("YYYY", Locale.ENGLISH))
 }
+
+private void fetch(repo) {
+    def cmd = $/git 
+        fetch 
+        --prune
+        --git-dir=${repo.resolve('.git')}/$
+    logger.info "Fetch $repo" + cmd.execute().text
+}
+
 
 private List<String> findCommits(repo, author) {
     def cmd = $/git 
